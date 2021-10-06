@@ -49,7 +49,7 @@ import           Prelude                     (IO)
 {-# INLINABLE mkValidator #-}
 -- This should validate if and only if the two Booleans in the redeemer are equal!
 mkValidator :: () -> (Bool, Bool) -> ScriptContext -> Bool
-mkValidator _ (b, b') _ = traceIfFalse "There are not both TRUE" b && b'
+mkValidator _ (b, b') _ = traceIfFalse "There are not both TRUE" $ b && b'
 
 data Typed
 instance Scripts.ValidatorTypes Typed where
