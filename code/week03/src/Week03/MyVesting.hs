@@ -1,17 +1,18 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DeriveAnyClass      #-}
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE NoImplicitPrelude   #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell     #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Week03.MyVesting where
 
 import           Data.Aeson.Types                (FromJSON, ToJSON)
@@ -59,55 +60,55 @@ import qualified PlutusTx.IsData                 as PlutusTx
 import           PlutusTx.Prelude                (Bool (False), Eq ((==)),
                                                   Integer,
                                                   Maybe (Just, Nothing),
-                                                  Ord ((<=)), fst, mconcat,
-                                                  traceIfFalse, ($), (&&),
+                                                  Ord ((<), (<=)), fst, mconcat,
+                                                  traceIfFalse, ($), (&&), (.),
                                                   (<$>), (>>), (>>=))
 import           Prelude                         (Bool (False), Integer,
                                                   Semigroup ((<>)), Show (show),
                                                   String, undefined)
 import           Text.Printf                     (printf)
 
-data VestingDatum = VestingDatum
+data VestingParam = VestingParam
     { beneficiary :: PubKeyHash
     , deadline    :: POSIXTime
     } deriving Show
 
-PlutusTx.unstableMakeIsData ''VestingDatum
+PlutusTx.makeLift ''VestingParam
 
 {-# INLINABLE mkValidator #-}
-mkValidator :: VestingDatum -> () -> ScriptContext -> Bool
-mkValidator dat () ctx = traceIfFalse "bereficiary's signature is missing" signedByBeneficiary &&
+mkValidator :: VestingParam -> () -> () -> ScriptContext -> Bool
+mkValidator p () () ctx = traceIfFalse "bereficiary's signature is missing" signedByBeneficiary &&
                          traceIfFalse "deadline not reached" deadlineReached
     where
         info :: TxInfo
         info = scriptContextTxInfo ctx
 
         signedByBeneficiary :: Bool
-        signedByBeneficiary = txSignedBy info $ beneficiary dat
+        signedByBeneficiary = txSignedBy info $ beneficiary p
 
         deadlineReached :: Bool
-        deadlineReached = contains (from $ deadline dat) (txInfoValidRange info)
+        deadlineReached = contains (from $ deadline p) (txInfoValidRange info)
 
 data Vesting
 instance Scripts.ValidatorTypes Vesting where
-    type instance DatumType Vesting = VestingDatum
+    type instance DatumType Vesting = ()
     type instance RedeemerType Vesting = ()
 
-typedValidator :: Scripts.TypedValidator Vesting
-typedValidator = Scripts.mkTypedValidator @Vesting
-    $$(PlutusTx.compile [|| mkValidator ||])
+typedValidator :: VestingParam -> Scripts.TypedValidator Vesting
+typedValidator p = Scripts.mkTypedValidator @Vesting
+    ($$(PlutusTx.compile [|| mkValidator ||]) `PlutusTx.applyCode` PlutusTx.liftCode p)
     $$(PlutusTx.compile [|| wrap ||])
     where
-        wrap = Scripts.wrapValidator @VestingDatum @()
+        wrap = Scripts.wrapValidator @() @()
 
-validator :: Validator
-validator = Scripts.validatorScript typedValidator
+validator :: VestingParam -> Validator
+validator = Scripts.validatorScript . typedValidator
 
-valHash :: Ledger.ValidatorHash
-valHash = Scripts.validatorHash typedValidator
+valHash :: VestingParam -> Ledger.ValidatorHash
+valHash = Scripts.validatorHash . typedValidator
 
-scrAddress :: Ledger.Address
-scrAddress = scriptAddress validator
+scrAddress :: VestingParam -> Ledger.Address
+scrAddress = scriptAddress . validator
 
 data GiveParams = GiveParams
     { gpBeneficiary :: !PubKeyHash
@@ -117,48 +118,46 @@ data GiveParams = GiveParams
 
 type VestingSchema =
     Endpoint "give" GiveParams
-    .\/ Endpoint "grab" ()
+    .\/ Endpoint "grab" POSIXTime
 
 give :: AsContractError e => GiveParams -> Contract w s e ()
 give gp = do
-    let dat = VestingDatum { beneficiary = gpBeneficiary gp, deadline = gpDeadline gp }
-        tx = mustPayToTheScript dat $ Ada.lovelaceValueOf $ gpAmount gp
-    ledgerTx <- submitTxConstraints typedValidator tx
+    let p = VestingParam { beneficiary = gpBeneficiary gp, deadline = gpDeadline gp }
+        tx = mustPayToTheScript () $ Ada.lovelaceValueOf $ gpAmount gp
+    ledgerTx <- submitTxConstraints (typedValidator p) tx
     void $ awaitTxConfirmed $ txId ledgerTx
     logInfo @String $ printf "made a gift of %d lovelance to %s with deadline %s"
         (gpAmount gp)
         (show $ gpBeneficiary gp)
         (show $ gpDeadline gp)
 
-grab :: forall w s e. AsContractError e => Contract w s e ()
-grab = do
+grab :: forall w s e. AsContractError e => POSIXTime -> Contract w s e ()
+grab d = do
     now <- currentTime
     pkh <- pubKeyHash <$> ownPubKey
-    utxos <- Map.filter (isSuitable pkh now) <$> utxoAt scrAddress
-    if Map.null utxos
-        then logInfo @String $ "no gifts available"
+    if now < d
+        then logInfo @String $ "too early"
         else do
-            let orefs = fst <$> Map.toList utxos
-                lookups = Constraints.unspentOutputs utxos <> Constraints.otherScript validator
-                tx :: TxConstraints Void Void
-                tx = mconcat [mustSpendScriptOutput oref $ Redeemer $ PlutusTx.toData () | oref <- orefs] <> mustValidateIn (from now)
-            ledgerTx <- submitTxConstraintsWith @Void lookups tx
-            void $ awaitTxConfirmed $ txId ledgerTx
-            logInfo @String $ "collected gifts"
-    where
-        isSuitable :: PubKeyHash -> POSIXTime -> TxOutTx -> Bool
-        isSuitable pkh now o = case txOutDatumHash $ txOutTxOut o of
-            Nothing -> False
-            Just h -> case Map.lookup h $ txData $ txOutTxTx o of
-                Nothing -> False
-                Just (Datum e) -> case PlutusTx.fromData e of
-                    Nothing -> False
-                    Just d  -> beneficiary d == pkh && deadline d <= now
+            let p = VestingParam
+                        { beneficiary = pkh
+                        , deadline = d
+                        }
+            utxos <- utxoAt $ scrAddress p
+            if Map.null utxos
+                then logInfo @String $ "no gifts available"
+                else do
+                    let orefs = fst <$> Map.toList utxos
+                        lookups = Constraints.unspentOutputs utxos <> Constraints.otherScript (validator p)
+                        tx :: TxConstraints Void Void
+                        tx = mconcat [mustSpendScriptOutput oref $ Redeemer $ PlutusTx.toData () | oref <- orefs] <> mustValidateIn (from now)
+                    ledgerTx <- submitTxConstraintsWith @Void lookups tx
+                    void $ awaitTxConfirmed $ txId ledgerTx
+                    logInfo @String $ "collected gifts"
 
 endpoints :: Contract () VestingSchema Text ()
 endpoints = (give' `select` grab') >> endpoints
     where give' = endpoint @"give" >>= give
-          grab' = endpoint @"grab" >> grab
+          grab' = endpoint @"grab" >>= grab
 
 mkSchemaDefinitions ''VestingSchema
 mkKnownCurrencies []
