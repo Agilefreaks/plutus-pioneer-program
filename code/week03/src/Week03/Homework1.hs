@@ -15,21 +15,22 @@
 module Week03.Homework1 where
 
 import           Control.Monad        hiding (fmap)
-import           Data.Aeson           (ToJSON, FromJSON)
+import           Data.Aeson           (FromJSON, ToJSON, Value (Bool))
 import           Data.Map             as Map
 import           Data.Text            (Text)
 import           Data.Void            (Void)
 import           GHC.Generics         (Generic)
+import           Ledger               hiding (singleton)
+import           Ledger.Ada           as Ada
+import           Ledger.Constraints   as Constraints
+import qualified Ledger.Typed.Scripts as Scripts
+import           Playground.Contract  (ToSchema, ensureKnownCurrencies,
+                                       printJson, printSchemas, stage)
+import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
+import           Playground.Types     (KnownCurrency (..))
 import           Plutus.Contract
 import qualified PlutusTx
 import           PlutusTx.Prelude     hiding (unless)
-import           Ledger               hiding (singleton)
-import           Ledger.Constraints   as Constraints
-import qualified Ledger.Typed.Scripts as Scripts
-import           Ledger.Ada           as Ada
-import           Playground.Contract  (printJson, printSchemas, ensureKnownCurrencies, stage, ToSchema)
-import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
-import           Playground.Types     (KnownCurrency (..))
 import           Prelude              (IO)
 import qualified Prelude              as P
 import           Text.Printf          (printf)
@@ -46,7 +47,28 @@ PlutusTx.unstableMakeIsData ''VestingDatum
 -- This should validate if either beneficiary1 has signed the transaction and the current slot is before or at the deadline
 -- or if beneficiary2 has signed the transaction and the deadline has passed.
 mkValidator :: VestingDatum -> () -> ScriptContext -> Bool
-mkValidator _ _ _ = False -- FIX ME!
+mkValidator dat _ ctx = case (signedByBeneficiary1, signedByBeneficiary2) of
+                        (True, False) -> traceIfFalse "Should be before deadline" beforeDeadline
+                        (False, True) -> traceIfFalse "Deadline should have passed" afterDeadline
+                        _ -> traceError "Should be signed by either of the beneficiaries"
+                    where
+                        info :: TxInfo
+                        info = scriptContextTxInfo ctx
+
+                        signedByBeneficiary1 :: Bool
+                        signedByBeneficiary1 = signedBy' beneficiary1
+
+                        signedByBeneficiary2 :: Bool
+                        signedByBeneficiary2 = signedBy' beneficiary2
+
+                        signedBy' :: (VestingDatum -> PubKeyHash) -> Bool
+                        signedBy' f = txSignedBy info $ f dat
+
+                        beforeDeadline :: Bool
+                        beforeDeadline = contains (to $ deadline dat) $ txInfoValidRange info
+
+                        afterDeadline :: Bool
+                        afterDeadline = contains (from $ deadline dat) $ txInfoValidRange info
 
 data Vesting
 instance Scripts.ValidatorTypes Vesting where
