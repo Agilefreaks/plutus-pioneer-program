@@ -47,28 +47,28 @@ PlutusTx.unstableMakeIsData ''VestingDatum
 -- This should validate if either beneficiary1 has signed the transaction and the current slot is before or at the deadline
 -- or if beneficiary2 has signed the transaction and the deadline has passed.
 mkValidator :: VestingDatum -> () -> ScriptContext -> Bool
-mkValidator dat _ ctx = case (signedByBeneficiary1, signedByBeneficiary2) of
-                        (True, False) -> traceIfFalse "Should be before deadline" beforeDeadline
-                        (False, True) -> traceIfFalse "Deadline should have passed" afterDeadline
-                        _ -> traceError "Should be signed by either of the beneficiaries"
-                    where
-                        info :: TxInfo
-                        info = scriptContextTxInfo ctx
+mkValidator dat _ ctx = case (beneficiary1Signed, beneficiary2Signed) of
+                            (True, _) -> traceIfFalse "Should before or at the deadline" isBeforeDeadline
+                            (_, True) -> traceIfFalse "Deadline should have passed" deadlineHasPassed
+                            _         -> traceError "Should be signed by somebody"
+                        where
+                            info :: TxInfo
+                            info = scriptContextTxInfo ctx
 
-                        signedByBeneficiary1 :: Bool
-                        signedByBeneficiary1 = signedBy' beneficiary1
+                            beneficiary1Signed :: Bool
+                            beneficiary1Signed = beneficiarySigned beneficiary1
 
-                        signedByBeneficiary2 :: Bool
-                        signedByBeneficiary2 = signedBy' beneficiary2
+                            beneficiary2Signed :: Bool
+                            beneficiary2Signed = beneficiarySigned beneficiary2
 
-                        signedBy' :: (VestingDatum -> PubKeyHash) -> Bool
-                        signedBy' f = txSignedBy info $ f dat
+                            beneficiarySigned :: (VestingDatum -> PubKeyHash) -> Bool
+                            beneficiarySigned f = txSignedBy info $ f dat
 
-                        beforeDeadline :: Bool
-                        beforeDeadline = contains (to $ deadline dat) $ txInfoValidRange info
+                            isBeforeDeadline :: Bool
+                            isBeforeDeadline = to (deadline dat) `contains` txInfoValidRange info
 
-                        afterDeadline :: Bool
-                        afterDeadline = contains (from $ deadline dat) $ txInfoValidRange info
+                            deadlineHasPassed :: Bool
+                            deadlineHasPassed = deadline dat `before` txInfoValidRange info
 
 data Vesting
 instance Scripts.ValidatorTypes Vesting where
