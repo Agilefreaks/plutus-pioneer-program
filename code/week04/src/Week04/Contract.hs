@@ -1,17 +1,27 @@
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
-{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE TypeOperators     #-}
 
 module Week04.Contract where
 
-import Control.Monad.Freer.Extras as Extras
-import Data.Functor               (void)
-import Data.Text                  (Text, unpack)
-import Data.Void                  (Void)
-import Plutus.Contract            as Contract
-import Plutus.Trace.Emulator      as Emulator
-import Wallet.Emulator.Wallet
+import           Control.Monad.Freer.Extras as Extras (logInfo)
+import           Data.Functor               (void)
+import           Data.Text                  (Text, unpack)
+import           Data.Void                  (Void)
+import           Plutus.Contract            as Contract (Contract, Empty,
+                                                         Endpoint, endpoint,
+                                                         handleError, logError,
+                                                         logInfo, tell,
+                                                         throwError, type (.\/),
+                                                         waitNSlots)
+import           Plutus.Trace.Emulator      as Emulator (EmulatorTrace,
+                                                         activateContractWallet,
+                                                         callEndpoint,
+                                                         observableState,
+                                                         runEmulatorTraceIO,
+                                                         waitNSlots)
+import           Wallet.Emulator.Wallet     (Wallet (Wallet))
 
 -- Contract w s e a
 -- EmulatorTrace a
