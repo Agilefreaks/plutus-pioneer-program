@@ -12,40 +12,72 @@
 
 module Week05.Homework1 where
 
-import           Control.Monad              hiding (fmap)
-import           Control.Monad.Freer.Extras as Extras
-import           Data.Aeson                 (ToJSON, FromJSON)
-import           Data.Default               (Default (..))
-import           Data.Text                  (Text)
-import           Data.Void                  (Void)
-import           GHC.Generics               (Generic)
-import           Plutus.Contract            as Contract
-import           Plutus.Trace.Emulator      as Emulator
+import           Control.Monad          (Monad ((>>), (>>=)), void)
+import           Data.Aeson             (FromJSON, ToJSON)
+import           Data.Default           (Default (..))
+import           Data.Text              (Text)
+import           Data.Void              (Void)
+import           GHC.Generics           (Generic)
+import           Ledger                 (POSIXTime, PubKeyHash,
+                                         ScriptContext (scriptContextTxInfo),
+                                         TxInfo (txInfoValidRange), contains,
+                                         mkMintingPolicyScript, pubKeyHash,
+                                         scriptCurrencySymbol, to, txId,
+                                         txSignedBy)
+import           Ledger.Constraints     as Constraints (mintingPolicy,
+                                                        mustMintValue,
+                                                        mustValidateIn)
+import           Ledger.TimeSlot        (slotToBeginPOSIXTime)
+import qualified Ledger.Typed.Scripts   as Scripts
+import           Ledger.Value           as Value (CurrencySymbol, TokenName,
+                                                  singleton)
+import           Playground.Contract    (ToSchema)
+import           Playground.TH          (mkKnownCurrencies, mkSchemaDefinitions)
+import           Playground.Types       (KnownCurrency (..))
+import           Plutus.Contract        as Contract (Contract, Endpoint,
+                                                     awaitTxConfirmed,
+                                                     currentTime, endpoint,
+                                                     logError, logInfo,
+                                                     ownPubKey,
+                                                     submitTxConstraintsWith)
+import           Plutus.Trace.Emulator  as Emulator (activateContractWallet,
+                                                     callEndpoint,
+                                                     runEmulatorTraceIO,
+                                                     waitNSlots)
 import qualified PlutusTx
-import           PlutusTx.Prelude           hiding (Semigroup(..), unless)
-import           Ledger                     hiding (mint, singleton)
-import           Ledger.Constraints         as Constraints
-import           Ledger.TimeSlot
-import qualified Ledger.Typed.Scripts       as Scripts
-import           Ledger.Value               as Value
-import           Playground.Contract        (printJson, printSchemas, ensureKnownCurrencies, stage, ToSchema)
-import           Playground.TH              (mkKnownCurrencies, mkSchemaDefinitions)
-import           Playground.Types           (KnownCurrency (..))
-import           Prelude                    (IO, Semigroup (..), Show (..), String, undefined)
-import           Text.Printf                (printf)
+import           PlutusTx.Prelude       (AdditiveSemigroup ((+)), Bool, Integer,
+                                         Ord ((>)), traceIfFalse, ($), (&&),
+                                         (<$>))
+import           Prelude                (IO, Semigroup (..), Show (..), String)
+import           Text.Printf            (printf)
 import           Wallet.Emulator.Wallet
 
 {-# INLINABLE mkPolicy #-}
 -- This policy should only allow minting (or burning) of tokens if the owner of the specified PubKeyHash
 -- has signed the transaction and if the specified deadline has not passed.
 mkPolicy :: PubKeyHash -> POSIXTime -> () -> ScriptContext -> Bool
-mkPolicy pkh deadline () ctx = True -- FIX ME!
+mkPolicy pkh deadline () ctx = traceIfFalse "You must be the owner" isOwner &&
+                               traceIfFalse "Deadline has passed" beforeDeadline
+    where
+        info :: TxInfo
+        info = scriptContextTxInfo ctx
+
+        isOwner :: Bool
+        isOwner = txSignedBy info pkh
+
+        beforeDeadline :: Bool
+        beforeDeadline = contains (to deadline) (txInfoValidRange info)
 
 policy :: PubKeyHash -> POSIXTime -> Scripts.MintingPolicy
-policy pkh deadline = undefined -- IMPLEMENT ME!
+policy pkh deadline = mkMintingPolicyScript $
+    $$(PlutusTx.compile [|| \pkh' deadline' -> Scripts.wrapMintingPolicy $ mkPolicy pkh' deadline' ||])
+    `PlutusTx.applyCode`
+    PlutusTx.liftCode pkh
+    `PlutusTx.applyCode`
+    PlutusTx.liftCode deadline
 
 curSymbol :: PubKeyHash -> POSIXTime -> CurrencySymbol
-curSymbol pkh deadline = undefined -- IMPLEMENT ME!
+curSymbol pkh deadline = scriptCurrencySymbol $ policy pkh deadline
 
 data MintParams = MintParams
     { mpTokenName :: !TokenName
