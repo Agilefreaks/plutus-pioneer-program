@@ -11,9 +11,11 @@ License-files:       LICENSE
 library
   hs-source-dirs:      src
   exposed-modules:     Week06.Oracle.Core
+                       Week06.Oracle.CoreNew
                        Week06.Oracle.Funds
                        Week06.Oracle.PAB
                        Week06.Oracle.Swap
+                       Week06.Oracle.SwapNew
                        Week06.Oracle.Test
   build-depends:       aeson
                      , base ^>=4.14.1.0

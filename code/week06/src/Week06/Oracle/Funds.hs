@@ -1,30 +1,22 @@
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Week06.Oracle.Funds
     ( ownFunds
     , ownFunds'
     ) where
 
-import           Control.Monad    hiding (fmap)
+import           Control.Monad    (Monad (return, (>>=)), void)
 import qualified Data.Map         as Map
 import           Data.Monoid      (Last (..))
 import           Data.Text        (Text)
-import           Plutus.Contract  as Contract
-import           PlutusTx.Prelude hiding ((<$>))
+import           Ledger           (TxOut (txOutValue), TxOutTx (txOutTxOut),
+                                   Value, pubKeyAddress)
+import           Ledger.Value     as Value (flattenValue)
+import           Plutus.Contract  as Contract (Contract, Empty, handleError,
+                                               logError, logInfo, ownPubKey,
+                                               tell, utxoAt, waitNSlots)
+import           PlutusTx.Prelude (Maybe (Just), mconcat, ($), (++), (.))
 import           Prelude          (Show (..), String, (<$>))
-import           Ledger           hiding (singleton)
-import           Ledger.Value     as Value
 
 ownFunds :: Contract w s Text Value
 ownFunds = do

@@ -5,16 +5,16 @@ module Main
     ( main
     ) where
 
-import Control.Concurrent
-import Control.Monad          (when)
-import Control.Monad.IO.Class (MonadIO (..))
-import Data.ByteString        (ByteString)
-import Data.ByteString.Char8  (unpack)
-import Data.Proxy             (Proxy (..))
-import Data.Text              (pack)
-import Data.UUID
-import Network.HTTP.Req
-import Text.Regex.TDFA
+import           Control.Concurrent
+import           Control.Monad          (when)
+import           Control.Monad.IO.Class (MonadIO (..))
+import           Data.ByteString        (ByteString)
+import           Data.ByteString.Char8  (unpack)
+import           Data.Proxy             (Proxy (..))
+import           Data.Text              (pack)
+import           Data.UUID
+import           Network.HTTP.Req
+import           Text.Regex.TDFA
 
 main :: IO ()
 main = do
@@ -44,16 +44,5 @@ updateOracle uuid x = runReq defaultHttpConfig $ do
         else "error updating oracle"
 
 getExchangeRate :: IO Integer
-getExchangeRate = runReq defaultHttpConfig $ do
-    v <- req
-        GET
-        (https "coinmarketcap.com" /: "currencies" /: "cardano")
-        NoReqBody
-        bsResponse
-        mempty
-    let priceRegex      = "priceValue___11gHJ \">\\$([\\.0-9]*)" :: ByteString
-        (_, _, _, [bs]) = responseBody v =~ priceRegex :: (ByteString, ByteString, ByteString, [ByteString])
-        d               = read $ unpack bs :: Double
-        x               = round $ 1_000_000 * d
-    liftIO $ putStrLn $ "queried exchange rate: " ++ show d
-    return x
+getExchangeRate =
+    return 1_750_000

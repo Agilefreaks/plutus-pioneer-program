@@ -21,17 +21,17 @@ import qualified Data.Map                   as Map
 import           Data.Monoid                (Last (..))
 import           Data.Text                  (Text)
 import           Ledger
-import           Ledger.Value               as Value
 import           Ledger.Ada                 as Ada
+import           Ledger.Value               as Value
 import           Plutus.Contract            as Contract
 import           Plutus.Trace.Emulator      as Emulator
-import           PlutusTx.Prelude           hiding (Semigroup(..), unless)
-import           Prelude                    (IO, Semigroup(..), Show (..))
+import           PlutusTx.Prelude           hiding (Semigroup (..), unless)
+import           Prelude                    (IO, Semigroup (..), Show (..))
 import           Wallet.Emulator.Wallet
 
-import           Week06.Oracle.Core
+import           Week06.Oracle.CoreNew
 import           Week06.Oracle.Funds
-import           Week06.Oracle.Swap
+import           Week06.Oracle.SwapNew
 
 assetSymbol :: CurrencySymbol
 assetSymbol = "ff"

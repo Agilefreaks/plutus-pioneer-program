@@ -22,14 +22,15 @@ import qualified Data.Map             as Map
 import           Data.Maybe           (mapMaybe)
 import           Data.Monoid          (Last (..))
 import           Data.Text            (Text)
-import           Plutus.Contract      as Contract
-import qualified PlutusTx
-import           PlutusTx.Prelude     hiding (Semigroup(..), (<$>), unless, mapMaybe, find)
 import           Ledger               hiding (singleton)
+import           Ledger.Ada           as Ada hiding (divide)
 import           Ledger.Constraints   as Constraints
 import qualified Ledger.Typed.Scripts as Scripts
-import           Ledger.Ada           as Ada hiding (divide)
 import           Ledger.Value         as Value
+import           Plutus.Contract      as Contract
+import qualified PlutusTx
+import           PlutusTx.Prelude     hiding (Semigroup (..), find, mapMaybe,
+                                       unless, (<$>))
 import           Prelude              (Semigroup (..), Show (..), String, (<$>))
 
 import           Week06.Oracle.Core

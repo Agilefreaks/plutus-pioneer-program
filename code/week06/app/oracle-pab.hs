@@ -15,11 +15,13 @@ module Main
     ) where
 
 import           Control.Monad                       (forM_, void, when)
-import           Control.Monad.Freer                 (Eff, Member, interpret, type (~>))
+import           Control.Monad.Freer                 (Eff, Member, interpret,
+                                                      type (~>))
 import           Control.Monad.Freer.Error           (Error)
 import           Control.Monad.Freer.Extras.Log      (LogMsg)
 import           Control.Monad.IO.Class              (MonadIO (..))
-import           Data.Aeson                          (FromJSON, Result (..), fromJSON)
+import           Data.Aeson                          (FromJSON, Result (..),
+                                                      fromJSON)
 import           Data.Default                        (Default (..))
 import           Data.Monoid                         (Last (..))
 import           Data.Text                           (Text, pack)
@@ -27,21 +29,23 @@ import           Ledger
 import           Ledger.Constraints
 import qualified Ledger.Value                        as Value
 import           Plutus.Contract
+import qualified Plutus.Contracts.Currency           as Currency
 import           Plutus.PAB.Effects.Contract         (ContractEffect (..))
-import           Plutus.PAB.Effects.Contract.Builtin (Builtin, SomeBuiltin (..), endpointsToSchemas, handleBuiltin)
+import           Plutus.PAB.Effects.Contract.Builtin (Builtin, SomeBuiltin (..),
+                                                      endpointsToSchemas,
+                                                      handleBuiltin)
 import           Plutus.PAB.Monitoring.PABLogMsg     (PABMultiAgentMsg)
 import           Plutus.PAB.Simulator                (SimulatorEffectHandlers)
 import qualified Plutus.PAB.Simulator                as Simulator
 import           Plutus.PAB.Types                    (PABError (..))
 import qualified Plutus.PAB.Webserver.Server         as PAB.Server
-import qualified Plutus.Contracts.Currency           as Currency
 
 import           Wallet.Emulator.Types               (Wallet (..), walletPubKey)
 import           Wallet.Types                        (ContractInstanceId (..))
 
-import qualified Week06.Oracle.Core                  as Oracle
+import qualified Week06.Oracle.CoreNew               as Oracle
 import           Week06.Oracle.PAB                   (OracleContracts (..))
-import qualified Week06.Oracle.Swap                  as Oracle
+import qualified Week06.Oracle.SwapNew               as Oracle
 
 main :: IO ()
 main = void $ Simulator.runSimulationWith handlers $ do
